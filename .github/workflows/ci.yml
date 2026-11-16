@@ -47,7 +47,7 @@ jobs:
       - uses: azure/setup-helm@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.27"
       - run: go install github.com/yannh/kubeconform/cmd/kubeconform@v0.6.7
       - name: Lint with the example's values
         run: helm lint charts/service -f examples/hello-service/deploy/values.yaml --strict
@@ -90,7 +90,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.27"
       - uses: azure/setup-helm@v4
       - name: Render the skeleton as Backstage would
         run: python3 scripts/render-skeleton.py "$RUNNER_TEMP/svc"

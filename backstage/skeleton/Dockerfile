@@ -8,7 +8,7 @@
 # - Distroless, non-root, no shell or package manager in the final image.
 # - Module downloads cached across builds with a BuildKit cache mount.
 
-ARG GO_VERSION=1.23
+ARG GO_VERSION=1.27
 
 FROM golang:${GO_VERSION}-alpine AS build
 WORKDIR /src

@@ -2,13 +2,13 @@
 #   include:
 #     - component: $CI_SERVER_FQDN/platform/golden-path/go@1.0.0
 #       inputs:
-#         go_version: "1.23"
+#         go_version: "1.27"
 spec:
   inputs:
     stage:
       default: test
     go_version:
-      default: "1.23"
+      default: "1.27"
     working_directory:
       default: "."
       description: Directory containing go.mod.
