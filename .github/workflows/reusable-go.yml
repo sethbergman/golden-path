@@ -23,7 +23,7 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: ${{ inputs.working-directory }}/${{ inputs.go-version-file }}
           cache-dependency-path: ${{ inputs.working-directory }}/go.mod
