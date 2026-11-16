@@ -1,0 +1,37 @@
+# GitLab CI/CD component: test and vet a Go module.
+#   include:
+#     - component: $CI_SERVER_FQDN/platform/golden-path/go@1.0.0
+#       inputs:
+#         go_version: "1.23"
+spec:
+  inputs:
+    stage:
+      default: test
+    go_version:
+      default: "1.23"
+    working_directory:
+      default: "."
+      description: Directory containing go.mod.
+---
+go-test:
+  stage: $[[ inputs.stage ]]
+  image: golang:$[[ inputs.go_version ]]
+  variables:
+    GOFLAGS: -mod=readonly
+    GOCACHE: $CI_PROJECT_DIR/.cache/go-build
+    GOMODCACHE: $CI_PROJECT_DIR/.cache/go-mod
+  cache:
+    key:
+      files: ["$[[ inputs.working_directory ]]/go.sum", "$[[ inputs.working_directory ]]/go.mod"]
+    paths: [.cache/]
+  script:
+    - cd "$[[ inputs.working_directory ]]"
+    - test -z "$(gofmt -l . | tee /dev/stderr)"
+    - go vet ./...
+    - go test -race -covermode=atomic -coverprofile=coverage.out ./...
+    - go tool cover -func=coverage.out | tail -1
+  coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG

@@ -1,0 +1,35 @@
+# Reusable workflow: test a Go module. Consumers call it with
+#   uses: sethbergman/golden-path/.github/workflows/reusable-go.yml@v1
+name: reusable-go
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        type: string
+        default: "."
+      go-version-file:
+        type: string
+        default: go.mod
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ inputs.working-directory }}/${{ inputs.go-version-file }}
+          cache-dependency-path: ${{ inputs.working-directory }}/go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l . | tee /dev/stderr)"
+      - run: go vet ./...
+      - run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+      - name: Coverage summary
+        run: go tool cover -func=coverage.out | tail -1 | tee -a "$GITHUB_STEP_SUMMARY"

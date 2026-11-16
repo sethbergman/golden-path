@@ -1,0 +1,45 @@
+# GitLab CI/CD component: deploy the golden-path chart with the image digest
+# from container-build. Uses a GitLab agent for Kubernetes context, so no
+# kubeconfig or cluster credentials are stored in CI variables.
+spec:
+  inputs:
+    stage:
+      default: deploy
+    environment:
+      description: GitLab environment name, e.g. staging or production.
+    kube_context:
+      description: Agent context, e.g. platform/agents:staging
+    namespace:
+    release:
+      default: $CI_PROJECT_NAME
+    values_file:
+      default: deploy/values.yaml
+    chart:
+      default: oci://registry.gitlab.com/platform/golden-path/charts/service
+    chart_version:
+      default: 0.1.0
+    when:
+      default: on_success
+      options: [on_success, manual]
+---
+deploy-$[[ inputs.environment ]]:
+  stage: $[[ inputs.stage ]]
+  image:
+    name: alpine/helm:3.16.3
+    entrypoint: [""]
+  environment:
+    name: $[[ inputs.environment ]]
+  resource_group: deploy-$[[ inputs.environment ]]
+  script:
+    - test -n "${IMAGE_DIGEST:-}" || { echo "IMAGE_DIGEST missing; run container-build first"; exit 1; }
+    - >
+      helm upgrade --install "$[[ inputs.release ]]" "$[[ inputs.chart ]]"
+      --version "$[[ inputs.chart_version ]]"
+      --kube-context "$[[ inputs.kube_context ]]"
+      --namespace "$[[ inputs.namespace ]]"
+      -f "$[[ inputs.values_file ]]"
+      --set image.digest="$IMAGE_DIGEST"
+      --atomic --timeout 10m --wait
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: $[[ inputs.when ]]

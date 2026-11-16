@@ -1,0 +1,58 @@
+# GitLab CI/CD component: build and push an image with rootless BuildKit.
+# No Docker-in-Docker and no privileged pods, so it runs on hardened runners
+# that enforce Pod Security "baseline". Writes the pushed digest to
+# image.env (IMAGE_REF, IMAGE_DIGEST) for later jobs.
+spec:
+  inputs:
+    stage:
+      default: build
+    context:
+      default: "."
+    dockerfile:
+      default: Dockerfile
+    build_args:
+      default: ""
+      description: Space-separated KEY=VALUE pairs.
+    image:
+      default: $CI_REGISTRY_IMAGE
+    push:
+      type: boolean
+      default: true
+---
+container-build:
+  stage: $[[ inputs.stage ]]
+  image:
+    name: moby/buildkit:v0.17.3-rootless
+    entrypoint: [""]
+  variables:
+    BUILDKITD_FLAGS: --oci-worker-no-process-sandbox
+  before_script:
+    - mkdir -p ~/.docker
+    - printf '{"auths":{"%s":{"username":"%s","password":"%s"}}}' "$CI_REGISTRY" "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" > ~/.docker/config.json
+  script:
+    - |
+      set -eu
+      args=""
+      for kv in $[[ inputs.build_args ]]; do args="$args --opt build-arg:$kv"; done
+      buildctl-daemonless.sh build \
+        --frontend dockerfile.v0 \
+        --local context="$[[ inputs.context ]]" \
+        --local dockerfile="$[[ inputs.context ]]" \
+        --opt filename="$[[ inputs.dockerfile ]]" \
+        --opt build-arg:VERSION="$CI_COMMIT_SHORT_SHA" $args \
+        --opt attest:sbom= --opt attest:provenance=mode=max \
+        --export-cache type=registry,ref="$[[ inputs.image ]]:buildcache",mode=max \
+        --import-cache type=registry,ref="$[[ inputs.image ]]:buildcache" \
+        --output type=image,name="$[[ inputs.image ]]:$CI_COMMIT_SHORT_SHA",push=$[[ inputs.push ]] \
+        --metadata-file metadata.json
+      digest=$(sed -n 's/.*"containerimage.digest": *"\([^"]*\)".*/\1/p' metadata.json)
+      echo "IMAGE_REF=$[[ inputs.image ]]@$digest" > image.env
+      echo "IMAGE_DIGEST=$digest" >> image.env
+      cat image.env
+  artifacts:
+    reports:
+      dotenv: image.env
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
