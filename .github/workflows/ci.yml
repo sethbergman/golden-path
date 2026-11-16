@@ -44,7 +44,7 @@ jobs:
       FAKE_DIGEST: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     steps:
       - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
       - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
@@ -91,7 +91,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
       - name: Render the skeleton as Backstage would
         run: python3 scripts/render-skeleton.py "$RUNNER_TEMP/svc"
       - name: Generated service builds and passes its tests
