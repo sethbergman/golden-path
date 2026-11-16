@@ -39,6 +39,9 @@ jobs:
   chart:
     name: Helm chart
     runs-on: ubuntu-latest
+    env:
+      # Any well-formed digest; deploys set the real one.
+      FAKE_DIGEST: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
@@ -52,14 +55,14 @@ jobs:
         run: |
           helm template hello-service charts/service \
             -f examples/hello-service/deploy/values.yaml \
-            --set image.digest=sha256:$(printf 'a%.0s' $(seq 64)) \
+            --set image.digest="$FAKE_DIGEST" \
             | "$(go env GOPATH)/bin/kubeconform" -strict -summary -skip ServiceMonitor -
       - name: Checkov on the rendered chart
         run: |
           mkdir -p "$RUNNER_TEMP/rendered"
           helm template hello-service charts/service -n platform \
             -f examples/hello-service/deploy/values.yaml \
-            --set image.digest=sha256:$(printf 'a%.0s' $(seq 64)) > "$RUNNER_TEMP/rendered/hello-service.yaml"
+            --set image.digest="$FAKE_DIGEST" > "$RUNNER_TEMP/rendered/hello-service.yaml"
           pipx run checkov -d "$RUNNER_TEMP/rendered" --framework kubernetes --config-file .checkov.yaml --quiet --compact
       - name: Guardrails reject unsafe values
         run: |
