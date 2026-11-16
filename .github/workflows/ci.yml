@@ -1,0 +1,153 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The example service goes through the same reusable workflows a team would
+  # call, so the golden path is tested by using it.
+  example-test:
+    name: hello-service / test
+    uses: ./.github/workflows/reusable-go.yml
+    with:
+      working-directory: examples/hello-service
+
+  example-image:
+    name: hello-service / image
+    needs: example-test
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/reusable-container.yml
+    with:
+      context: examples/hello-service
+      dockerfile: docker/go/Dockerfile
+      image: hello-service
+      build-args: MAIN=./cmd/hello-service
+      push: ${{ github.ref == 'refs/heads/main' }}
+
+  chart:
+    name: Helm chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+      - run: go install github.com/yannh/kubeconform/cmd/kubeconform@v0.6.7
+      - name: Lint with the example's values
+        run: helm lint charts/service -f examples/hello-service/deploy/values.yaml --strict
+      - name: Render and validate against Kubernetes schemas
+        run: |
+          helm template hello-service charts/service \
+            -f examples/hello-service/deploy/values.yaml \
+            --set image.digest=sha256:$(printf 'a%.0s' $(seq 64)) \
+            | "$(go env GOPATH)/bin/kubeconform" -strict -summary -skip ServiceMonitor -
+      - name: Checkov on the rendered chart
+        run: |
+          mkdir -p "$RUNNER_TEMP/rendered"
+          helm template hello-service charts/service -n platform \
+            -f examples/hello-service/deploy/values.yaml \
+            --set image.digest=sha256:$(printf 'a%.0s' $(seq 64)) > "$RUNNER_TEMP/rendered/hello-service.yaml"
+          pipx run checkov -d "$RUNNER_TEMP/rendered" --framework kubernetes --config-file .checkov.yaml --quiet --compact
+      - name: Guardrails reject unsafe values
+        run: |
+          set +e
+          fail=0
+          check() { # $1 = description, rest = helm template args
+            desc=$1; shift
+            if helm template t charts/service "$@" >/dev/null 2>&1; then
+              echo "::error::accepted: ${desc}"; fail=1
+            else
+              echo "rejected: ${desc}"
+            fi
+          }
+          check "missing team"        --set image.repository=r
+          check "missing image"       --set team=t
+          check "latest tag"          --set team=t --set image.repository=r --set image.tag=latest
+          check "single replica HPA"  --set team=t --set image.repository=r --set autoscaling.minReplicas=1
+          check "LoadBalancer"        --set team=t --set image.repository=r --set service.type=LoadBalancer
+          exit $fail
+
+  skeleton:
+    name: Backstage template renders a working service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+      - uses: azure/setup-helm@v4
+      - name: Render the skeleton as Backstage would
+        run: python3 scripts/render-skeleton.py "$RUNNER_TEMP/svc"
+      - name: Generated service builds and passes its tests
+        working-directory: ${{ runner.temp }}/svc
+        run: |
+          test -z "$(gofmt -l .)"
+          go vet ./...
+          go test -race ./...
+          go build -o /dev/null ./cmd/orders-api
+      - name: Generated deploy values work with the chart
+        run: helm template orders-api charts/service -f "$RUNNER_TEMP/svc/deploy/values.yaml" > /dev/null
+      - name: Generated image builds
+        run: docker build -t orders-api:ci "$RUNNER_TEMP/svc"
+
+  components:
+    name: GitLab CI/CD components
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Each component is a spec header plus one job document
+        run: |
+          python3 - <<'PY'
+          import glob, sys, yaml
+          ok = True
+          for f in sorted(glob.glob("templates/*.yml")):
+              docs = list(yaml.safe_load_all(open(f)))
+              if len(docs) != 2 or "spec" not in docs[0] or not docs[1]:
+                  print(f"::error file={f}::expected 'spec:' header, '---', then job definitions"); ok = False
+              else:
+                  print(f"{f}: inputs={list(docs[0]['spec'].get('inputs', {}))} jobs={list(docs[1])}")
+          sys.exit(0 if ok else 1)
+          PY
+
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.9"
+      - run: terraform fmt -check -recursive terraform
+      - run: |
+          for d in terraform/modules/service-baseline terraform/examples/hello-service; do
+            terraform -chdir="$d" init -backend=false -input=false
+            terraform -chdir="$d" validate
+          done
+
+  lint:
+    name: Workflow lint and Checkov
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: actionlint
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color
+      - uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: terraform,dockerfile,github_actions
+          quiet: true
