@@ -1,0 +1,76 @@
+# Owning team. Required: it becomes a label on every object for routing
+# alerts and attributing cost.
+team: ""
+
+image:
+  repository: ""        # required, e.g. 123456789012.dkr.ecr.us-east-1.amazonaws.com/hello-service
+  tag: ""               # defaults to the chart's appVersion
+  digest: ""            # sha256:...; preferred over tag when set
+  pullPolicy: IfNotPresent
+
+replicaCount: 2         # ignored while autoscaling.enabled
+containerPort: 8080
+
+env: []                 # [{name: LOG_LEVEL, value: info}]
+envFrom: []             # [{secretRef: {name: hello-service}}]
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 256Mi       # no CPU limit by default: throttling hurts latency more than it saves
+
+probes:
+  startup:
+    path: /healthz
+    periodSeconds: 2
+    failureThreshold: 30
+  liveness:
+    path: /healthz
+    periodSeconds: 10
+    failureThreshold: 3
+  readiness:
+    path: /readyz
+    periodSeconds: 5
+    failureThreshold: 2
+
+service:
+  type: ClusterIP
+  port: 80
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}       # eks.amazonaws.com/role-arn: <from the service-baseline Terraform module>
+  automountToken: false # IRSA still works: EKS injects its own projected token
+
+podAnnotations: {}
+podLabels: {}
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
+
+networkPolicy:
+  enabled: true
+  # Who may call this service. Empty means pods in the same namespace only.
+  ingressFrom: []       # NetworkPolicyPeer list, e.g. [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}}]
+  monitoringNamespace: monitoring
+
+serviceMonitor:
+  enabled: false        # rendered only if the Prometheus Operator CRD exists
+  interval: 30s
+
+terminationGracePeriodSeconds: 30
+spreadAcrossZones: true
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

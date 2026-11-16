@@ -1,0 +1,10 @@
+apiVersion: v2
+name: service
+description: Golden-path Helm chart for a stateless HTTP service, secure by default.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords: [golden-path, platform]
+maintainers:
+  - name: Seth Bergman
+    url: https://github.com/sethbergman

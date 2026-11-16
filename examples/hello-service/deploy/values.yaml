@@ -1,0 +1,25 @@
+# hello-service on the golden-path chart. CI sets image.digest to the image it
+# just built, so what gets deployed is exactly what was tested.
+team: platform
+
+image:
+  repository: ghcr.io/sethbergman/hello-service
+  tag: "0.1.0"
+
+serviceAccount:
+  annotations:
+    # From the service-baseline Terraform module (role_arn output).
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/svc-hello-service
+
+env:
+  - name: LOG_LEVEL
+    value: info
+
+networkPolicy:
+  ingressFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ingress-nginx
+
+serviceMonitor:
+  enabled: true

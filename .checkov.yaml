@@ -1,0 +1,9 @@
+# Checks skipped for the rendered service chart, each with its reason.
+skip-check:
+  # No CPU limit by default: CFS throttling hurts tail latency more than an
+  # unbounded burst costs. Memory is limited. Teams can add a CPU limit.
+  - CKV_K8S_11
+  # Images are pinned by digest at deploy time, so re-pulling adds nothing.
+  - CKV_K8S_15
+  # Helm sets the namespace at install time; templates never hard-code one.
+  - CKV_K8S_21
