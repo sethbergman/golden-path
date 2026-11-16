@@ -1,0 +1,12 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: hello-service
+  description: Reference service for the golden path
+  annotations:
+    github.com/project-slug: sethbergman/golden-path
+  tags: [go, golden-path]
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform
