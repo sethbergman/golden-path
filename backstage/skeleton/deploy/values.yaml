@@ -1,0 +1,9 @@
+# Values for the golden-path service chart. CI sets image.digest on deploy.
+team: ${{ values.team }}
+
+image:
+  repository: ghcr.io/${{ values.repoOwner }}/${{ values.name }}
+
+serviceAccount:
+  annotations: {}
+  # eks.amazonaws.com/role-arn: <role_arn output of the service-baseline Terraform module>

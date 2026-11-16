@@ -1,0 +1,26 @@
+# Copied without templating: the golden path's reusable workflows do the work.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    uses: sethbergman/golden-path/.github/workflows/reusable-go.yml@v1
+
+  image:
+    needs: test
+    permissions:
+      contents: read
+      packages: write
+    uses: sethbergman/golden-path/.github/workflows/reusable-container.yml@v1
+    with:
+      context: .
+      dockerfile: Dockerfile
+      image: ${{ github.event.repository.name }}
+      push: ${{ github.ref == 'refs/heads/main' }}

@@ -1,0 +1,17 @@
+# Same pipeline for teams on GitLab, built from the golden path's CI/CD components.
+include:
+  - component: $CI_SERVER_FQDN/platform/golden-path/go@1.0.0
+  - component: $CI_SERVER_FQDN/platform/golden-path/container@1.0.0
+  - component: $CI_SERVER_FQDN/platform/golden-path/helm-deploy@1.0.0
+    inputs:
+      environment: staging
+      kube_context: platform/agents:staging
+      namespace: ${{ values.team }}
+  - component: $CI_SERVER_FQDN/platform/golden-path/helm-deploy@1.0.0
+    inputs:
+      environment: production
+      kube_context: platform/agents:production
+      namespace: ${{ values.team }}
+      when: manual
+
+stages: [test, build, deploy]

@@ -1,0 +1,86 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: go-service
+  title: Go service (golden path)
+  description: >-
+    A production-ready Go HTTP service with CI, a hardened image, deployment
+    values for the golden-path Helm chart, and a catalog entry.
+  tags: [go, golden-path, recommended]
+spec:
+  owner: group:platform
+  type: service
+
+  parameters:
+    - title: Service
+      required: [name, description, owner]
+      properties:
+        name:
+          title: Name
+          type: string
+          description: Lowercase, used for the repository, image and Kubernetes objects.
+          pattern: "^[a-z][a-z0-9-]{1,30}[a-z0-9]$"
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+          maxLength: 140
+        owner:
+          title: Owning team
+          type: string
+          ui:field: OwnerPicker
+          ui:options:
+            catalogFilter:
+              kind: Group
+    - title: Repository
+      required: [repoUrl]
+      properties:
+        repoUrl:
+          title: Repository location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts: [github.com]
+
+  steps:
+    - id: fetch
+      name: Generate from the golden path
+      action: fetch:template
+      input:
+        url: ./skeleton
+        # Workflow files use ${{ }} for GitHub expressions; leave them as-is.
+        copyWithoutTemplating:
+          - .github/workflows/*
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          team: ${{ parameters.owner | parseEntityRef | pick('name') }}
+          repoOwner: ${{ (parameters.repoUrl | parseRepoUrl).owner }}
+          repoName: ${{ (parameters.repoUrl | parseRepoUrl).repo }}
+
+    - id: publish
+      name: Create the repository
+      action: publish:github
+      input:
+        repoUrl: ${{ parameters.repoUrl }}
+        description: ${{ parameters.description }}
+        defaultBranch: main
+        repoVisibility: internal
+        protectDefaultBranch: true
+        requireCodeOwnerReviews: false
+
+    - id: register
+      name: Register in the catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: /catalog-info.yaml
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish'].output.remoteUrl }}
+      - title: Open in catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}
